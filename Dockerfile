@@ -1,0 +1,34 @@
+# Edit History:
+# | Person | Date | Comment |
+# | --- | --- | --- |
+# | Shiladitya | 07/10/2026 | Created |
+#
+FROM python:3.12-slim AS builder
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /install
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --upgrade pip \
+    && pip install --prefix=/install/deps -r requirements.txt
+
+FROM python:3.12-slim AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/usr/local/bin:${PATH}"
+
+WORKDIR /app
+
+COPY --from=builder /install/deps /usr/local
+COPY app ./app
+
+EXPOSE 8091
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8091"]

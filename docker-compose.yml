@@ -1,0 +1,53 @@
+# Edit History:
+# | Person | Date | Comment |
+# | --- | --- | --- |
+# | Shiladitya | 07/10/2026 | Created |
+#
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ecommerce-api
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      APP_NAME: FastAPI E-Commerce Demo
+      LOG_LEVEL: DEBUG
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: ecommerce
+      MYSQL_USER: ecommerce_user
+      MYSQL_PASSWORD: ecommerce_password
+      DEFAULT_USER_BALANCE: 100000
+      LOG_DIR: /var/log/ecommerce
+      LOG_FILE_NAME: app.log
+    ports:
+      - "8091:8091"
+    volumes:
+      - ./log:/var/log/ecommerce
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:8.4
+    container_name: ecommerce-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: ecommerce
+      MYSQL_USER: ecommerce_user
+      MYSQL_PASSWORD: ecommerce_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot_password"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  mysql_data:

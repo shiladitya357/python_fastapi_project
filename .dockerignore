@@ -1,0 +1,16 @@
+# Edit History:
+# | Person | Date | Comment |
+# | --- | --- | --- |
+# | Shiladitya | 07/10/2026 | Created |
+#
+.git
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+.mypy_cache
+.env
+mysql_data
+log
+test-results
+tests
