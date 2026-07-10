@@ -1,0 +1,118 @@
+# Edit History:
+# | Person | Date | Comment |
+# | --- | --- | --- |
+# | Shiladitya | 07/11/2026 | Created |
+name: FastAPI CI Pipeline
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.12"
+  IMAGE_NAME: "shiladitya997/python_fastapi_project"
+
+jobs:
+  test-build-scan-push:
+    name: Test, Build, Scan, and Push Docker Image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+      
+      - name: Set Up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+      
+      - name: Run Tests
+        run: |
+          pytest --junitxml=test-results/results.xml
+      
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+      
+      - name: Build Docker Image
+        run: |
+          docker build -t ${{ env.IMAGE_NAME }}:${{ github.sha }} -t ${{ env.IMAGE_NAME }}:latest . 
+      
+      - name: Scan Docker Image with Trivy
+        uses: aquasecurity/trivy-action@v0.35.0
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+      
+      - name: Log in to DockerHub
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      
+      - name: Push Docker Image to DockerHub
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          docker push ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          docker push ${{ env.IMAGE_NAME }}:latest
+      
+      - name: Log out from DockerHub
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          docker logout
+      
+      - name: Notify on Failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issueTitle = `CI Pipeline Failed for Commit: ${process.env.GITHUB_SHA}`;
+            const issueBody = `The CI pipeline for commit ${process.env.GITHUB_SHA} has failed. Please check the workflow logs for details.`;
+            await github.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: issueTitle,
+              body: issueBody
+            })
+
+      - name: Publish Summary
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const summary = `
+            ## CI Pipeline Summary
+            - **Commit:** ${process.env.GITHUB_SHA}
+            - **Branch:** ${process.env.GITHUB_REF}
+            - **Workflow Status:** ${process.env.GITHUB_WORKFLOW}
+            - **Run Number:** ${process.env.GITHUB_RUN_NUMBER}
+            - **Run ID:** ${process.env.GITHUB_RUN_ID}
+            - **Image Name (Tagged):** ${process.env.IMAGE_NAME}:${process.env.GITHUB_SHA}
+            - **Image Name (Latest):** ${process.env.IMAGE_NAME}:latest
+            `;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: summary
+            })
