@@ -2,6 +2,7 @@
 Edit History:
 | Person | Date | Comment |
 | --- | --- | --- |
+| Shiladitya | 07/11/2026 | Modified the Jenkinsfile |
 | Shiladitya | 07/10/2026 | Created |
 */
 
@@ -10,12 +11,20 @@ pipeline {
 
     environment {
         PYTHON_VERSION = '3.12'
-        IMAGE_NAME = 'fastapi-ecommerce'
-        REGISTRY_URL = 'docker.io'
-        REGISTRY_NAMESPACE = 'exampleorg'
-        REGISTRY_CREDENTIALS_ID = 'docker-registry-credentials'
-        IMAGE_TAG = 'local'
+        IMAGE_REPOSITORY = "shiladitya997/python_fastapi_project"
+        IMAGE_NAME = 'python_fastapi_project'
+        REGISTRY_URL = 'https://hub.docker.com/repository/shiladitya997/python_fastapi_project'
+        IMAGE_TAG = "${BUILD_NUMBER}"
+        IMAGE_NAME = "${IMAGE_REPOSITORY}:${IMAGE_TAG}"
+        LATEST_IMAGE = "${IMAGE_REPOSITORY}:latest"
+        REGISTRY_CREDENTIALS = "DOCKERHUB_REPO_SHILADITYA"
     }
+
+    options {
+        timestamps()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        disableConcurrentBuilds()
+    }   
 
     stages {
         stage('Checkout') {
@@ -24,28 +33,10 @@ pipeline {
             }
         }
 
-        stage('Prepare Image Metadata') {
-            steps {
-                script {
-                    env.GIT_SHORT_COMMIT = sh(
-                        script: 'git rev-parse --short=7 HEAD',
-                        returnStdout: true
-                    ).trim()
-                    env.IMAGE_TAG = "${env.BUILD_NUMBER}-${env.GIT_SHORT_COMMIT}"
-                }
-            }
-        }
-
-        stage('Set Up Python') {
+        stage('Set Up Python/Install Dependencies') {
             steps {
                 sh '''
-                    if command -v python${PYTHON_VERSION} >/dev/null 2>&1; then
-                      PYTHON_BIN=python${PYTHON_VERSION}
-                    else
-                      PYTHON_BIN=python3
-                    fi
-
-                    ${PYTHON_BIN} -m venv .venv
+                    python3 -m venv .venv
                     . .venv/bin/activate
                     python -m pip install --upgrade pip
                     pip install -r requirements.txt -r requirements-dev.txt
@@ -58,7 +49,8 @@ pipeline {
                 sh '''
                     . .venv/bin/activate
                     mkdir -p test-results
-                    pytest --junitxml=test-results/pytest.xml
+                    # pytest --junitxml=test-results/pytest.xml
+                    pytest -v
                 '''
             }
             post {
@@ -72,9 +64,21 @@ pipeline {
             steps {
                 sh '''
                     docker build \
-                      -t ${REGISTRY_URL}/${REGISTRY_NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG} \
-                      -t ${REGISTRY_URL}/${REGISTRY_NAMESPACE}/${IMAGE_NAME}:latest \
+                      -t ${IMAGE_NAME}:${IMAGE_TAG} \
+                      -t ${IMAGE_NAME}:latest \
                       .
+                '''
+            }
+        }
+
+        stage('Scan Docker Image') {
+            steps {
+                sh '''
+                    trivy image \
+                        --exit-code 1 \
+                        --severity HIGH,CRITICAL \
+                        --ignore-unfixed \
+                        ${IMAGE_NAME}
                 '''
             }
         }
@@ -83,7 +87,7 @@ pipeline {
             steps {
                 withCredentials([
                     usernamePassword(
-                        credentialsId: "${REGISTRY_CREDENTIALS_ID}",
+                        credentialsId: "${REGISTRY_CREDENTIALS}",
                         usernameVariable: 'DOCKER_USERNAME',
                         passwordVariable: 'DOCKER_PASSWORD'
                     )
@@ -93,9 +97,9 @@ pipeline {
                           --username "${DOCKER_USERNAME}" \
                           --password-stdin
 
-                        docker push ${REGISTRY_URL}/${REGISTRY_NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG}
-                        docker push ${REGISTRY_URL}/${REGISTRY_NAMESPACE}/${IMAGE_NAME}:latest
-                        docker logout "${REGISTRY_URL}"
+                        docker push ${IMAGE_NAME}
+                        docker push ${LATEST_IMAGE}
+                        docker logout
                     '''
                 }
             }
@@ -103,15 +107,24 @@ pipeline {
     }
 
     post {
+        success {
+            echo "CI completed successfully."
+            echo "Published ${IMAGE_NAME}:${IMAGE_TAG} and ${IMAGE_NAME}:latest"
+        }
+        failure {
+            echo "Pipeline failed. Please check the logs for details."
+        }
         always {
+            sh '''
+                docker image rm ${IMAGE_NAME} || true
+                docker image rm ${LATEST_IMAGE} || true
+                rm -rf .venv
+            '''
             cleanWs(
                 deleteDirs: true,
                 disableDeferredWipeout: true,
                 notFailBuild: true
             )
-        }
-        success {
-            echo "CI completed. Published ${REGISTRY_URL}/${REGISTRY_NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG}"
         }
     }
 }
