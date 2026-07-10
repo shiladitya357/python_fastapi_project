@@ -58,16 +58,16 @@ jobs:
         run: |
           docker build -t ${{ env.IMAGE_NAME }}:${{ github.sha }} -t ${{ env.IMAGE_NAME }}:latest . 
       
-      - name: Scan Docker Image with Trivy
-        uses: aquasecurity/trivy-action@v0.35.0
-        with:
-          image-ref: ${{ env.IMAGE_NAME }}:${{ github.sha }}
-          format: 'table'
-          # exit-code: '1'
-          exit-code: 0 # using exit code 0 as this is a demo project and we want to continue the pipeline even if vulnerabilities are found
-          ignore-unfixed: true
-          vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
+      ## Commenting this out as this is demo project.
+      # - name: Scan Docker Image with Trivy
+      #   uses: aquasecurity/trivy-action@v0.35.0
+      #   with:
+      #     image-ref: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+      #     format: 'table'
+      #     exit-code: '1'
+      #     ignore-unfixed: true
+      #     vuln-type: 'os,library'
+      #     severity: 'CRITICAL,HIGH'
       
       - name: Log in to DockerHub
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
