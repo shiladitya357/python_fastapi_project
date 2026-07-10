@@ -88,16 +88,12 @@ jobs:
       
       - name: Notify on Failure
         if: failure()
-        uses: actions/github-script@v7
-        with:
-          run: |
+        run: |
             echo "The CI pipeline for commit ${process.env.GITHUB_SHA} has failed. Please check the workflow logs for details."
 
       - name: Publish Summary
         if: always()
-        uses: actions/github-script@v7
-        with:
-          run: |
+        run: |
             echo "## CI Pipeline Summary"
             echo "**Commit:** ${process.env.GITHUB_SHA}"
             echo "**Branch:** ${process.env.GITHUB_REF}"
