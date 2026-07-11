@@ -12,7 +12,6 @@ pipeline {
     environment {
         PYTHON_VERSION = '3.12'
         IMAGE_REPOSITORY = "shiladitya997/python_fastapi_project"
-        IMAGE_NAME = 'python_fastapi_project'
         REGISTRY_URL = 'https://hub.docker.com/repository/shiladitya997/python_fastapi_project'
         IMAGE_TAG = "${BUILD_NUMBER}"
         IMAGE_NAME = "${IMAGE_REPOSITORY}:${IMAGE_TAG}"
@@ -29,13 +28,14 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                checkout scm
+                git credentialsId: 'GITHUB_TOKEN_2', url: 'https://github.com/shiladitya357/python_fastapi_project', branch: 'main'
             }
         }
 
         stage('Set Up Python/Install Dependencies') {
             steps {
                 sh '''
+                    apt-get update && apt-get install python3
                     python3 -m venv .venv
                     . .venv/bin/activate
                     python -m pip install --upgrade pip
